@@ -13,6 +13,7 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.HashMap;
+import java.util.Iterator;
 
 import static org.springframework.http.HttpHeaders.USER_AGENT;
 
@@ -39,12 +40,16 @@ public class SpeakerController {
     public ResponseEntity Group(@RequestParam(value="group_name", required = false) String groupName,
                                 @RequestParam(value="speaker") String[] speakerName) {
 
+        // Check if we already have a group
+        if (speakerGroups.size() > 0)
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("There is already a group");
+
         // Check to make sure the group doesn't already exist
         GroupInfo groupInfo = null;
         if (groupName.length() > 0) {
             groupInfo = speakerGroups.get(groupName);
             if (groupInfo != null)
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Group already exists");
         }
 
         // Check to make sure speaker name list is not empty
@@ -55,14 +60,32 @@ public class SpeakerController {
         groupInfo = new GroupInfo();
         if (groupName.length() > 0)
             groupInfo.setName(groupName);
+        else
+            groupInfo.generateName();
 
         for (int ix = 0; ix < speakerName.length; ix++)
             groupInfo.addSpeaker(speakers.get(speakerName[ix]));
 
         SpeakerInfo masterSpeaker = groupInfo.getSpeaker(groupInfo.getMasterSpeakerName());
-        String url = "http://" + masterSpeaker.getIp() + ":" + masterSpeaker.getPort() + "/UIC?cmd=<name>SetUngroup</name>";
+        String masterUrl = "http://" + masterSpeaker.getIp() + ":" + masterSpeaker.getPort() +
+                "/UIC?cmd=<pwron>on</pwron><name>SetMultispkGroup</name>" +
+                "<p type=\"cdata\" name=\"name\" val=\"empty\"><![CDATA[" + groupInfo.getName() + "]]></p>" +
+                "<p type=\"dec\" name=\"index\" val=\"1\"/>" +
+                "<p type=\"str\" name=\"type\" val=\"main\"/>" +
+                "<p type=\"dec\" name=\"spknum\" val=\"" + groupInfo.getNumSpeakers() + "\"/>" +
+                "<p type=\"str\" name=\"audiosourcemacaddr\" val=\"" + masterSpeaker.getMac() + "\"/>" +
+                "<p type=\"cdata\" name=\"audiosourcename\" val=\"empty\"><![CDATA[" + masterSpeaker.getName() + "]]></p>" +
+                "<p type=\"str\" name=\"audiosourcetype\" val=\"speaker\"/>";
+
+        Iterator it = groupInfo.getSpeakerMap().entrySet().iterator();
+        while (it.hasNext()) {
+            SpeakerInfo slaveSpeaker = (SpeakerInfo)it.next();
+            masterUrl += "<p type=\"str\" name=\"subspkip\" val=\"" + slaveSpeaker.getIp() + "\"/>" +
+                    "<p type=\"str\" name=\"subspkmacaddr\" val=\"" + slaveSpeaker.getMac() + "\"/>";
+        }
+
         try {
-            sendGet(url);
+            sendGet(masterUrl);
         } catch (Exception ex) {
             ex.printStackTrace();
         }
