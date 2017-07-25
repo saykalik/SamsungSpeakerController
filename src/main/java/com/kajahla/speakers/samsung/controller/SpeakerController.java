@@ -20,7 +20,7 @@ import static org.springframework.http.HttpHeaders.USER_AGENT;
 public class SpeakerController {
 
     private HashMap<String, SpeakerInfo> speakers = new HashMap<>();
-    private HashMap<String, HashMap<String, GroupInfo>> speakerGroups = new HashMap<>();
+    private HashMap<String, GroupInfo> speakerGroups = new HashMap<>();
 
 
     public SpeakerController() {
@@ -36,13 +36,33 @@ public class SpeakerController {
     }
 
     @RequestMapping("/group")
-    public ResponseEntity Group(@RequestParam(value="speaker") String[] speakerName) {
+    public ResponseEntity Group(@RequestParam(value="group_name", required = false) String groupName,
+                                @RequestParam(value="speaker") String[] speakerName) {
 
-        if (speakerName.length == 0)
+        // Check to make sure the group doesn't already exist
+        GroupInfo groupInfo = null;
+        if (groupName.length() > 0) {
+            groupInfo = speakerGroups.get(groupName);
+            if (groupInfo != null)
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
+        }
 
+        // Check to make sure speaker name list is not empty
+        if (speakerName.length == 0)
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
+
+        // Create a group and send the command to the speakers to join
+        groupInfo = new GroupInfo();
+        if (groupName.length() > 0)
+            groupInfo.setName(groupName);
+
+        for (int ix = 0; ix < speakerName.length; ix++)
+            groupInfo.addSpeaker(speakers.get(speakerName[ix]));
+
+        SpeakerInfo masterSpeaker = groupInfo.getSpeaker(groupInfo.getMasterSpeakerName());
+        String url = "http://" + masterSpeaker.getIp() + ":" + masterSpeaker.getPort() + "/UIC?cmd=<name>SetUngroup</name>";
         try {
-            sendGet(" http://192.168.10.197:55001/UIC?cmd=<name>SetUngroup</name>");
+            sendGet(url);
         } catch (Exception ex) {
             ex.printStackTrace();
         }
@@ -54,14 +74,18 @@ public class SpeakerController {
     @RequestMapping("/ungroup")
     public ResponseEntity UnGroup(@RequestParam(value="group_name", required = false) String groupName) {
 
-        HashMap<String, GroupInfo> groupInfo = null;
+        // Check to make sure the group exists.
+        GroupInfo groupInfo = null;
         if (groupName.length() > 0) {
             groupInfo = speakerGroups.get(groupName);
             if (groupInfo == null)
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
 
+            // If the group exists then we get the master speaker and send an ungroup command to it
+            SpeakerInfo masterSpeaker = groupInfo.getSpeaker(groupInfo.getMasterSpeakerName());
+            String url = "http://" + masterSpeaker.getIp() + ":" + masterSpeaker.getPort() + "/UIC?cmd=<name>SetUngroup</name>";
             try {
-                sendGet(" http://192.168.10.197:55001/UIC?cmd=<name>SetUngroup</name>");
+                sendGet(url);
             } catch (Exception ex) {
                 ex.printStackTrace();
             }

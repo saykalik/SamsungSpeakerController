@@ -19,15 +19,16 @@ public class GroupInfo {
         return masterSpeakerName;
     }
 
-    public void setMasterSpeakerName(String masterSpeaker) {
-        this.masterSpeakerName = masterSpeaker;
-    }
-
     public SpeakerInfo getSpeaker(String name) {
         return speakers.get(name);
     }
 
-    public void AddSpeaker (SpeakerInfo speaker) {
+    public void addSpeaker (SpeakerInfo speaker) {
+
+        // If this is the first speaker to be added to the group it becomes the master speaker
+        if (speakers.size() == 0)
+            masterSpeakerName = speaker.getName();
+
         speakers.put(speaker.getName(), speaker);
     }
 }
