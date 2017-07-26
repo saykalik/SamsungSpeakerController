@@ -12,8 +12,9 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
+import java.util.Map;
 
 import static org.springframework.http.HttpHeaders.USER_AGENT;
 
@@ -46,7 +47,7 @@ public class SpeakerController {
 
         // Check to make sure the group doesn't already exist
         GroupInfo groupInfo = null;
-        if (groupName.length() > 0) {
+        if (groupName != null && groupName.length() > 0) {
             groupInfo = speakerGroups.get(groupName);
             if (groupInfo != null)
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Group already exists");
@@ -58,7 +59,7 @@ public class SpeakerController {
 
         // Create a group and send the command to the speakers to join
         groupInfo = new GroupInfo();
-        if (groupName.length() > 0)
+        if (groupName != null && groupName.length() > 0)
             groupInfo.setName(groupName);
         else
             groupInfo.generateName();
@@ -77,15 +78,45 @@ public class SpeakerController {
                 "<p type=\"cdata\" name=\"audiosourcename\" val=\"empty\"><![CDATA[" + masterSpeaker.getName() + "]]></p>" +
                 "<p type=\"str\" name=\"audiosourcetype\" val=\"speaker\"/>";
 
-        Iterator it = groupInfo.getSpeakerMap().entrySet().iterator();
-        while (it.hasNext()) {
-            SpeakerInfo slaveSpeaker = (SpeakerInfo)it.next();
+        for (Map.Entry<String, SpeakerInfo> entry : groupInfo.getSpeakerMap().entrySet()) {
+            String key = entry.getKey();
+            SpeakerInfo slaveSpeaker = entry.getValue();
+
+            if (slaveSpeaker.getName() == masterSpeaker.getName())
+                continue;
+
             masterUrl += "<p type=\"str\" name=\"subspkip\" val=\"" + slaveSpeaker.getIp() + "\"/>" +
                     "<p type=\"str\" name=\"subspkmacaddr\" val=\"" + slaveSpeaker.getMac() + "\"/>";
         }
 
+        // Generate all slave urls
+        ArrayList<String> slaveUrls = new ArrayList<>();
+        for (Map.Entry<String, SpeakerInfo> entry : groupInfo.getSpeakerMap().entrySet()) {
+            String key = entry.getKey();
+            SpeakerInfo slaveSpeaker = entry.getValue();
+
+            if (slaveSpeaker.getName() == masterSpeaker.getName())
+                continue;
+
+            String slaveUrl = "http://" + slaveSpeaker.getIp() + ":" + slaveSpeaker.getPort() +
+                    "/UIC?cmd=<pwron>on</pwron><name>SetMultispkGroup</name>" +
+                    "<p type=\"cdata\" name=\"name\" val=\"empty\"><![CDATA[" + groupInfo.getName() + "]]></p>" +
+                    "<p type=\"dec\" name=\"index\" val=\"1\"/>" +
+                    "<p type=\"str\" name=\"type\" val=\"sub\"/>" +
+                    "<p type=\"dec\" name=\"spknum\" val=\"" + groupInfo.getNumSpeakers() + "\"/>" +
+                    "<p type=\"str\" name=\"mainspkip\" val=\"" + masterSpeaker.getIp() + "\"/>" +
+                    "<p type=\"str\" name=\"mainspkmacaddr\" val=\"" + masterSpeaker.getMac() + "\"/>";
+
+            slaveUrls.add(slaveUrl);
+        }
+
+
         try {
+
             sendGet(masterUrl);
+            for (String slaveUrl : slaveUrls)
+                sendGet(slaveUrl);
+
         } catch (Exception ex) {
             ex.printStackTrace();
         }
@@ -99,7 +130,7 @@ public class SpeakerController {
 
         // Check to make sure the group exists.
         GroupInfo groupInfo = null;
-        if (groupName.length() > 0) {
+        if (groupName != null && groupName.length() > 0) {
             groupInfo = speakerGroups.get(groupName);
             if (groupInfo == null)
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
@@ -111,6 +142,20 @@ public class SpeakerController {
                 sendGet(url);
             } catch (Exception ex) {
                 ex.printStackTrace();
+            }
+        }
+        // There are no groups so go through all speakers and ungroup them
+        else {
+
+            for (Map.Entry<String, SpeakerInfo> entry : speakers.entrySet()) {
+                SpeakerInfo speaker = entry.getValue();
+
+                String url = "http://" + speaker.getIp() + ":" + speaker.getPort() + "/UIC?cmd=<name>SetUngroup</name>";
+                try {
+                    sendGet(url);
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
             }
         }
 
@@ -129,8 +174,10 @@ public class SpeakerController {
         //add request header
         con.setRequestProperty("User-Agent", USER_AGENT);
 
-        int responseCode = con.getResponseCode();
         System.out.println("\nSending 'GET' request to URL : " + url);
+
+        int responseCode = con.getResponseCode();
+
         System.out.println("Response Code : " + responseCode);
 
         BufferedReader in = new BufferedReader(

@@ -2,6 +2,7 @@ package com.kajahla.speakers.samsung.controller.model;
 
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
 
 public class GroupInfo {
     private String name = new String();
@@ -11,14 +12,18 @@ public class GroupInfo {
     public void generateName() {
         name = "";
 
-        Iterator it = speakers.entrySet().iterator();
-        while (it.hasNext()) {
-            SpeakerInfo speaker = (SpeakerInfo)it.next();
+        for (Map.Entry<String, SpeakerInfo> entry : speakers.entrySet()) {
+            String key = entry.getKey();
+            SpeakerInfo speaker = entry.getValue();
+
             name += speaker.getName() + " + ";
         }
     }
 
     public String getName() {
+        if (name == null || name.length() == 0)
+            generateName();
+
         return name;
     }
 
