@@ -62,4 +62,8 @@ public class SpeakerInfo {
     public void setMaster(boolean master) {
         isMaster = master;
     }
+
+    public String toString() {
+        return "Name: " + name + ", ip = " + ip + ", mac = " + mac + ", port = " + port;
+    }
 }

@@ -12,11 +12,17 @@ public class GroupInfo {
     public void generateName() {
         name = "";
 
+        if (masterSpeakerName.length() > 0)
+            name = masterSpeakerName;
+
         for (Map.Entry<String, SpeakerInfo> entry : speakers.entrySet()) {
             String key = entry.getKey();
             SpeakerInfo speaker = entry.getValue();
 
-            name += speaker.getName() + " + ";
+            if (speaker.getName() == masterSpeakerName)
+                continue;
+
+            name += " + " + speaker.getName();
         }
     }
 
