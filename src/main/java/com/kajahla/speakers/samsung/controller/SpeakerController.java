@@ -14,13 +14,16 @@ import javax.jmdns.ServiceListener;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.InetAddress;
-import java.net.URL;
-import java.net.UnknownHostException;
+import java.net.*;
 import java.util.HashMap;
-import java.util.Iterator;
 
+import org.w3c.dom.*;
+import org.xml.sax.InputSource;
+import javax.xml.parsers.*;
+import java.io.*;
+import java.util.Map;
+
+import static org.jboss.netty.handler.codec.http.HttpHeaders.Values.KEEP_ALIVE;
 import static org.springframework.http.HttpHeaders.USER_AGENT;
 
 @RestController
@@ -48,17 +51,6 @@ public class SpeakerController {
         } catch (InterruptedException e) {
             System.out.println(e.getMessage());
         }
-
-
-        SpeakerInfo kitchen = new SpeakerInfo("kitchen", "192.168.10.197", "55001","f8:77:b8:c4:8f:a1");
-        SpeakerInfo livingroom = new SpeakerInfo("livingroom", "192.168.10.238", "55001","f8:77:b8:c4:8f:ca");
-        SpeakerInfo boysroom = new SpeakerInfo("boysroom", "192.168.10.200", "55001","f8:77:b8:c5:55:a0");
-        SpeakerInfo bathroom = new SpeakerInfo("bathroom", "192.168.10.110", "55001","f8:77:b8:c5:d5:78");
-
-        speakers.put(kitchen.getName(), kitchen);
-        speakers.put(livingroom.getName(), livingroom);
-        speakers.put(boysroom.getName(), boysroom);
-        speakers.put(bathroom.getName(), bathroom);
     }
 
     private class SampleListener implements ServiceListener {
@@ -85,8 +77,38 @@ public class SpeakerController {
 //            System.out.println("Service resolved: " + event.getInfo());
 
             if (event.getInfo().getInetAddresses() != null && event.getInfo().getInetAddresses().length > 0) {
-                System.out.println("Service name: " + event.getName());
-                System.out.println("Service ip: " + event.getInfo().getInetAddresses()[0].getHostAddress());
+                String url = "http://" + event.getInfo().getInetAddresses()[0].getHostAddress() +":55001/UIC?cmd=<name>GetApInfo</name>";
+
+                String response;
+                try {
+                    response = sendGet(url);
+
+                    DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+                    DocumentBuilder builder = factory.newDocumentBuilder();
+                    Document document = builder.parse(new InputSource(new ByteArrayInputStream(response.getBytes("utf-8"))));
+
+                    NodeList list = document.getElementsByTagName("mac");
+
+                    if (list.getLength() > 0) {
+                        Element node = (Element) list.item(0);
+//                        System.out.println("Service MAC: " + node.getFirstChild().getNodeValue());
+
+
+                        SpeakerInfo newSpeaker = new SpeakerInfo(event.getName(),
+                                event.getInfo().getInetAddresses()[0].getHostAddress(),
+                                "55001",
+                                 node.getFirstChild().getNodeValue());
+                        speakers.put(newSpeaker.getName(), newSpeaker);
+
+                        System.out.println("Found and Added Speaker -> " + newSpeaker.toString());
+                    }
+
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+
+//                System.out.println("Service name: " + event.getName());
+//                System.out.println("Service ip: " + event.getInfo().getInetAddresses()[0].getHostAddress());
             }
         }
     }
@@ -102,7 +124,7 @@ public class SpeakerController {
 
         // Check to make sure the group doesn't already exist
         GroupInfo groupInfo = null;
-        if (groupName.length() > 0) {
+        if (groupName != null && groupName.length() > 0) {
             groupInfo = speakerGroups.get(groupName);
             if (groupInfo != null)
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Group already exists");
@@ -114,17 +136,23 @@ public class SpeakerController {
 
         // Create a group and send the command to the speakers to join
         groupInfo = new GroupInfo();
-        if (groupName.length() > 0)
+        if (groupName != null && groupName.length() > 0)
             groupInfo.setName(groupName);
         else
             groupInfo.generateName();
 
-        for (int ix = 0; ix < speakerName.length; ix++)
+        for (int ix = 0; ix < speakerName.length; ix++) {
+            if (speakers.get(speakerName[ix]) == null)
+                continue;
             groupInfo.addSpeaker(speakers.get(speakerName[ix]));
+        }
+
+        if (groupInfo.getNumSpeakers() < 2)
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
 
         SpeakerInfo masterSpeaker = groupInfo.getSpeaker(groupInfo.getMasterSpeakerName());
-        String masterUrl = "http://" + masterSpeaker.getIp() + ":" + masterSpeaker.getPort() +
-                "/UIC?cmd=<pwron>on</pwron><name>SetMultispkGroup</name>" +
+        String masterUrl = "http://" + masterSpeaker.getIp() + ":" + masterSpeaker.getPort() + "/UIC?cmd=";
+        String command = "<pwron>on</pwron><name>SetMultispkGroup</name>" +
                 "<p type=\"cdata\" name=\"name\" val=\"empty\"><![CDATA[" + groupInfo.getName() + "]]></p>" +
                 "<p type=\"dec\" name=\"index\" val=\"1\"/>" +
                 "<p type=\"str\" name=\"type\" val=\"main\"/>" +
@@ -133,15 +161,19 @@ public class SpeakerController {
                 "<p type=\"cdata\" name=\"audiosourcename\" val=\"empty\"><![CDATA[" + masterSpeaker.getName() + "]]></p>" +
                 "<p type=\"str\" name=\"audiosourcetype\" val=\"speaker\"/>";
 
-        Iterator it = groupInfo.getSpeakerMap().entrySet().iterator();
-        while (it.hasNext()) {
-            SpeakerInfo slaveSpeaker = (SpeakerInfo)it.next();
-            masterUrl += "<p type=\"str\" name=\"subspkip\" val=\"" + slaveSpeaker.getIp() + "\"/>" +
+        for (Map.Entry<String, SpeakerInfo> entry : groupInfo.getSpeakerMap().entrySet()) {
+            String key = entry.getKey();
+            SpeakerInfo slaveSpeaker = entry.getValue();
+
+            if (slaveSpeaker.getName() == groupInfo.getMasterSpeakerName())
+                continue;
+
+            command += "<p type=\"str\" name=\"subspkip\" val=\"" + slaveSpeaker.getIp() + "\"/>" +
                     "<p type=\"str\" name=\"subspkmacaddr\" val=\"" + slaveSpeaker.getMac() + "\"/>";
         }
 
         try {
-            sendGet(masterUrl);
+            sendGet(masterUrl, command);
         } catch (Exception ex) {
             ex.printStackTrace();
         }
@@ -155,28 +187,63 @@ public class SpeakerController {
 
         // Check to make sure the group exists.
         GroupInfo groupInfo = null;
-        if (groupName.length() > 0) {
+        if (groupName != null && groupName.length() > 0) {
             groupInfo = speakerGroups.get(groupName);
             if (groupInfo == null)
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Group does not exist");
+
 
             // If the group exists then we get the master speaker and send an ungroup command to it
             SpeakerInfo masterSpeaker = groupInfo.getSpeaker(groupInfo.getMasterSpeakerName());
             String url = "http://" + masterSpeaker.getIp() + ":" + masterSpeaker.getPort() + "/UIC?cmd=<name>SetUngroup</name>";
+
             try {
                 sendGet(url);
             } catch (Exception ex) {
                 ex.printStackTrace();
+            }
+
+        }
+        else {
+            // Send ungroup to every speaker we know
+            for (Map.Entry<String, SpeakerInfo> entry : speakers.entrySet()) {
+                String key = entry.getKey();
+                SpeakerInfo speaker = entry.getValue();
+
+                String url = "http://" + speaker.getIp() + ":" + speaker.getPort() + "/UIC?cmd=<name>SetUngroup</name>";
+
+                try {
+                    sendGet(url);
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
             }
         }
 
         return ResponseEntity.ok("ok");
     }
 
-    // HTTP GET request
-    private void sendGet(String url) throws Exception {
+    private String sendGet(String url) throws Exception {
+        return sendGet(url, "", false);
+    }
 
-        URL obj = new URL(url);
+
+    private String sendGet(String url, String command) throws Exception {
+        return sendGet(url, command,false);
+    }
+
+
+    // HTTP GET request
+    private String sendGet(String url, String command, boolean print) throws Exception {
+
+        String requestString = url;
+        if (command.length() > 0) {
+            //requestString += URLEncoder.encode(command, "UTF-8");
+
+            requestString += percentEncode(command);
+        }
+        URL obj = new URL(requestString);
+
         HttpURLConnection con = (HttpURLConnection) obj.openConnection();
 
         // optional default is GET
@@ -184,24 +251,67 @@ public class SpeakerController {
 
         //add request header
         con.setRequestProperty("User-Agent", USER_AGENT);
+        con.setUseCaches(false);
+        con.setRequestProperty("Connection", KEEP_ALIVE);
+        con.setRequestProperty("Accept", "*/*");
+        con.setRequestProperty("Accept-Language", "en-GB,en-US;q=0.8,en;q=0.6");
 
         int responseCode = con.getResponseCode();
-        System.out.println("\nSending 'GET' request to URL : " + url);
-        System.out.println("Response Code : " + responseCode);
+        if (print) {
+            System.out.println("\nSending 'GET' request to URL : " + url);
+            System.out.println("Response Code : " + responseCode);
+        }
 
-        BufferedReader in = new BufferedReader(
-                new InputStreamReader(con.getInputStream()));
-        String inputLine;
         StringBuffer response = new StringBuffer();
 
-        while ((inputLine = in.readLine()) != null) {
-            response.append(inputLine);
+        try {
+            BufferedReader in = new BufferedReader(
+                    new InputStreamReader(con.getInputStream()));
+            String inputLine;
+            response = new StringBuffer();
+
+            while ((inputLine = in.readLine()) != null) {
+                response.append(inputLine);
+            }
+            in.close();
+        } catch (IOException e) {
+            e.printStackTrace();
         }
-        in.close();
 
         //print result
-        System.out.println(response.toString());
+        if (print)
+            System.out.println(response.toString());
+
+        return response.toString();
     }
 
-
+    public static String percentEncode(String encodeMe) {
+        if (encodeMe == null) {
+            return "";
+        }
+        String encoded = encodeMe.replace("%", "%25");
+        encoded = encoded.replace(" ", "%20");
+        //encoded = encoded.replace("!", "%21");
+        encoded = encoded.replace("\"", "%22");
+        encoded = encoded.replace("#", "%23");
+        encoded = encoded.replace("$", "%24");
+        encoded = encoded.replace("&", "%26");
+        encoded = encoded.replace("'", "%27");
+        encoded = encoded.replace("(", "%28");
+        encoded = encoded.replace(")", "%29");
+        encoded = encoded.replace("*", "%2A");
+        //encoded = encoded.replace("+", "%2B");
+        encoded = encoded.replace(",", "%2C");
+        //encoded = encoded.replace("/", "%2F");
+        encoded = encoded.replace(":", "%3A");
+        encoded = encoded.replace(";", "%3B");
+        encoded = encoded.replace("<", "%3C");
+        //encoded = encoded.replace("=", "%3D");
+        encoded = encoded.replace(">", "%3E");
+        encoded = encoded.replace("?", "%3F");
+        encoded = encoded.replace("@", "%40");
+        //encoded = encoded.replace("[", "%5B");
+        //encoded = encoded.replace("]", "%5D");
+        return encoded;
+    }
 }
