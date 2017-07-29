@@ -56,8 +56,6 @@ public class SpeakerController {
     private class SampleListener implements ServiceListener {
         @Override
         public void serviceAdded(ServiceEvent event) {
-//            System.out.println("Service added: " + event.getInfo());
-
             try {
                 Thread.sleep(1000);
             } catch (InterruptedException e) {
@@ -68,14 +66,10 @@ public class SpeakerController {
         }
 
         @Override
-        public void serviceRemoved(ServiceEvent event) {
-//            System.out.println("Service removed: " + event.getInfo());
-        }
+        public void serviceRemoved(ServiceEvent event) { }
 
         @Override
         public void serviceResolved(ServiceEvent event) {
-//            System.out.println("Service resolved: " + event.getInfo());
-
             if (event.getInfo().getInetAddresses() != null && event.getInfo().getInetAddresses().length > 0) {
                 String url = "http://" + event.getInfo().getInetAddresses()[0].getHostAddress() +":55001/UIC?cmd=<name>GetApInfo</name>";
 
@@ -91,8 +85,6 @@ public class SpeakerController {
 
                     if (list.getLength() > 0) {
                         Element node = (Element) list.item(0);
-//                        System.out.println("Service MAC: " + node.getFirstChild().getNodeValue());
-
 
                         SpeakerInfo newSpeaker = new SpeakerInfo(event.getName(),
                                 event.getInfo().getInetAddresses()[0].getHostAddress(),
@@ -106,9 +98,6 @@ public class SpeakerController {
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
-
-//                System.out.println("Service name: " + event.getName());
-//                System.out.println("Service ip: " + event.getInfo().getInetAddresses()[0].getHostAddress());
             }
         }
     }
@@ -238,8 +227,6 @@ public class SpeakerController {
 
         String requestString = url;
         if (command.length() > 0) {
-            //requestString += URLEncoder.encode(command, "UTF-8");
-
             requestString += percentEncode(command);
         }
         URL obj = new URL(requestString);
@@ -285,6 +272,11 @@ public class SpeakerController {
         return response.toString();
     }
 
+
+    // For some reason the URLEncode call didn't encode the URL the way the
+    // speakers expected so the call would either fail or hang.  Used Postman
+    // and wireshark to find what worked and created this to replicate what
+    // postman was doing.
     public static String percentEncode(String encodeMe) {
         if (encodeMe == null) {
             return "";
