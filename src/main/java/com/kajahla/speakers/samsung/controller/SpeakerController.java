@@ -23,7 +23,6 @@ import javax.xml.parsers.*;
 import java.io.*;
 import java.util.Map;
 
-import static org.jboss.netty.handler.codec.http.HttpHeaders.Values.KEEP_ALIVE;
 import static org.springframework.http.HttpHeaders.USER_AGENT;
 
 @RestController
@@ -168,7 +167,7 @@ public class SpeakerController {
         }
 
 
-        return ResponseEntity.ok("ok");
+        return ResponseEntity.ok(groupInfo.getName());
     }
 
     @RequestMapping("/ungroup")
@@ -239,7 +238,6 @@ public class SpeakerController {
         //add request header
         con.setRequestProperty("User-Agent", USER_AGENT);
         con.setUseCaches(false);
-        con.setRequestProperty("Connection", KEEP_ALIVE);
         con.setRequestProperty("Accept", "*/*");
         con.setRequestProperty("Accept-Language", "en-GB,en-US;q=0.8,en;q=0.6");
 
