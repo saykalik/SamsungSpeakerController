@@ -2,8 +2,11 @@ package com.kajahla.speakers.samsung.controller;
 
 import com.kajahla.speakers.samsung.controller.model.GroupInfo;
 import com.kajahla.speakers.samsung.controller.model.SpeakerInfo;
+import com.kajahla.speakers.samsung.controller.model.SpeakerList;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -102,9 +105,9 @@ public class SpeakerController {
     }
 
 
-    @RequestMapping("/group")
+    @RequestMapping(path = "/group", consumes = "application/json", produces = MediaType.APPLICATION_JSON_UTF8_VALUE)
     public ResponseEntity Group(@RequestParam(value="group_name", required = false) String groupName,
-                                @RequestParam(value="speaker") String[] speakerName) {
+                                @RequestBody SpeakerList speakerName) {
 
         // Check if we already have a group
         if (speakerGroups.size() > 0)
@@ -119,7 +122,7 @@ public class SpeakerController {
         }
 
         // Check to make sure speaker name list is not empty
-        if (speakerName.length == 0)
+        if (speakerName.getLength() == 0)
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
 
         // Create a group and send the command to the speakers to join
@@ -129,10 +132,10 @@ public class SpeakerController {
         else
             groupInfo.generateName();
 
-        for (int ix = 0; ix < speakerName.length; ix++) {
-            if (speakers.get(speakerName[ix]) == null)
+        for (int ix = 0; ix < speakerName.getLength(); ix++) {
+            if (speakers.get(speakerName.getSpeaker(ix)) == null)
                 continue;
-            groupInfo.addSpeaker(speakers.get(speakerName[ix]));
+            groupInfo.addSpeaker(speakers.get(speakerName.getSpeaker(ix)));
         }
 
         if (groupInfo.getNumSpeakers() < 2)
@@ -167,7 +170,7 @@ public class SpeakerController {
         }
 
 
-        return ResponseEntity.ok(groupInfo.getName());
+        return ResponseEntity.ok("{ \"status\": \"success\", \"group_name\": \"" + groupInfo.getName() + "\" }");
     }
 
     @RequestMapping("/ungroup")
