@@ -82,6 +82,23 @@
                 </configuration>
             </plugin>
 		</plugins>
+
+        <resources>
+            <resource>
+                <directory>config</directory>
+                <targetPath>${project.build.outputDirectory}</targetPath>
+                <includes>
+                    <include>application.properties</include>
+                </includes>
+            </resource>
+            <resource>
+                <directory>config</directory>
+                <targetPath>${project.build.outputDirectory}</targetPath>
+                <includes>
+                    <include>keystore.p12</include>
+                </includes>
+            </resource>
+        </resources>
 	</build>
 
 
