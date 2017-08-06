@@ -41,7 +41,7 @@ public class SpeakerController {
             jmdns = JmDNS.create(InetAddress.getLocalHost());
 
             // Add a service listener
-            jmdns.addServiceListener("_spotify-connect._tcp.local.", new SampleListener());
+            jmdns.addServiceListener("_spotify-connect._tcp.local.", new SamsungSpeakerListener());
 
             // Wait a bit
             Thread.sleep(30000);
@@ -55,7 +55,7 @@ public class SpeakerController {
         }
     }
 
-    private class SampleListener implements ServiceListener {
+    private class SamsungSpeakerListener implements ServiceListener {
         @Override
         public void serviceAdded(ServiceEvent event) {
             try {
@@ -88,11 +88,11 @@ public class SpeakerController {
                     if (list.getLength() > 0) {
                         Element node = (Element) list.item(0);
 
-                        SpeakerInfo newSpeaker = new SpeakerInfo(event.getName(),
+                        SpeakerInfo newSpeaker = new SpeakerInfo(event.getName().toLowerCase(),
                                 event.getInfo().getInetAddresses()[0].getHostAddress(),
                                 "55001",
                                  node.getFirstChild().getNodeValue());
-                        speakers.put(newSpeaker.getName(), newSpeaker);
+                        speakers.put(newSpeaker.getName().toLowerCase(), newSpeaker);
 
                         System.out.println("Found and Added Speaker -> " + newSpeaker.toString());
                     }
@@ -135,13 +135,13 @@ public class SpeakerController {
         for (int ix = 0; ix < speakerName.getLength(); ix++) {
             if (speakers.get(speakerName.getSpeaker(ix)) == null)
                 continue;
-            groupInfo.addSpeaker(speakers.get(speakerName.getSpeaker(ix)));
+            groupInfo.addSpeaker(speakers.get(speakerName.getSpeaker(ix).toLowerCase()));
         }
 
         if (groupInfo.getNumSpeakers() < 2)
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
 
-        SpeakerInfo masterSpeaker = groupInfo.getSpeaker(groupInfo.getMasterSpeakerName());
+        SpeakerInfo masterSpeaker = groupInfo.getSpeaker(groupInfo.getMasterSpeakerName().toLowerCase());
         String masterUrl = "http://" + masterSpeaker.getIp() + ":" + masterSpeaker.getPort() + "/UIC?cmd=";
         String command = "<pwron>on</pwron><name>SetMultispkGroup</name>" +
                 "<p type=\"cdata\" name=\"name\" val=\"empty\"><![CDATA[" + groupInfo.getName() + "]]></p>" +
@@ -156,7 +156,7 @@ public class SpeakerController {
             String key = entry.getKey();
             SpeakerInfo slaveSpeaker = entry.getValue();
 
-            if (slaveSpeaker.getName() == groupInfo.getMasterSpeakerName())
+            if (slaveSpeaker.getName().toLowerCase() == groupInfo.getMasterSpeakerName().toLowerCase())
                 continue;
 
             command += "<p type=\"str\" name=\"subspkip\" val=\"" + slaveSpeaker.getIp() + "\"/>" +
@@ -185,7 +185,7 @@ public class SpeakerController {
 
 
             // If the group exists then we get the master speaker and send an ungroup command to it
-            SpeakerInfo masterSpeaker = groupInfo.getSpeaker(groupInfo.getMasterSpeakerName());
+            SpeakerInfo masterSpeaker = groupInfo.getSpeaker(groupInfo.getMasterSpeakerName().toLowerCase());
             String url = "http://" + masterSpeaker.getIp() + ":" + masterSpeaker.getPort() + "/UIC?cmd=<name>SetUngroup</name>";
 
             try {
