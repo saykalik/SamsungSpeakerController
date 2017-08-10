@@ -139,7 +139,7 @@ public class SpeakerController {
         }
 
         if (groupInfo.getNumSpeakers() < 2)
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Number of speakers is less than two");
 
         SpeakerInfo masterSpeaker = groupInfo.getSpeaker(groupInfo.getMasterSpeakerName().toLowerCase());
         String masterUrl = "http://" + masterSpeaker.getIp() + ":" + masterSpeaker.getPort() + "/UIC?cmd=";
@@ -167,6 +167,8 @@ public class SpeakerController {
             sendGet(masterUrl, command);
         } catch (Exception ex) {
             ex.printStackTrace();
+            return ResponseEntity.ok("{ \"status\": \"failure\", \"status\": \"" + ex.toString() + "\" }");
+
         }
 
 
@@ -207,11 +209,12 @@ public class SpeakerController {
                     sendGet(url);
                 } catch (Exception ex) {
                     ex.printStackTrace();
+                    return ResponseEntity.ok("{ \"status\": \"failure\", \"status\": \"" + ex.toString() + "\" }");
                 }
             }
         }
 
-        return ResponseEntity.ok("ok");
+        return ResponseEntity.ok("{ \"status\": \"success\" }");
     }
 
     private String sendGet(String url) throws Exception {
